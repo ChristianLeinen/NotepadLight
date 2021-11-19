@@ -4,8 +4,8 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Windows.Forms;
 using NotepadLight.Properties;
 
@@ -42,11 +42,11 @@ namespace NotepadLight
             Debug.Assert(!string.IsNullOrEmpty(filename));
             try
             {
-                Application.UseWaitCursor = true;
+                this.Cursor = Cursors.WaitCursor;
                 this.toolStripStatusLabel1.Text = "Saving...";
                 Application.DoEvents();
                 File.WriteAllText(filename, this.textBox1.Text, Encoding.Default);
-                Thread.Sleep(500);
+                //Thread.Sleep(500);
                 this.textBox1.Modified = false;
                 return true;
             }
@@ -58,7 +58,7 @@ namespace NotepadLight
             finally
             {
                 this.toolStripStatusLabel1.Text = "Ready";
-                Application.UseWaitCursor = false;
+                this.Cursor = this.DefaultCursor; ;
             }
         }
 
@@ -67,12 +67,16 @@ namespace NotepadLight
             Debug.Assert(!string.IsNullOrEmpty(filename));
             try
             {
-                Application.UseWaitCursor = true;
+                this.Cursor = Cursors.WaitCursor;
                 this.toolStripStatusLabel1.Text = "Loading...";
                 Application.DoEvents();
                 this.textBox1.Text = File.ReadAllText(filename, Encoding.Default);
-                Thread.Sleep(500);
+                //Thread.Sleep(500);
                 this.textBox1.Modified = false;
+                this.filename = filename;
+                this.textBox1.SelectionStart = 0;
+                this.textBox1.SelectionLength = 0;
+                this.UpdateCaption();
                 return true;
             }
             catch (Exception ex)
@@ -83,7 +87,7 @@ namespace NotepadLight
             finally
             {
                 this.toolStripStatusLabel1.Text = "Ready";
-                Application.UseWaitCursor = false;
+                this.Cursor = this.DefaultCursor;
             }
         }
 
@@ -148,6 +152,17 @@ namespace NotepadLight
                 e.Cancel = true;
         }
 
+        private void textBox1_ModifiedChanged(object sender, EventArgs e)
+        {
+            this.UpdateCaption();
+        }
+
+        private void textBox1_TextChanged(object sender, EventArgs e)
+        {
+
+        }
+        #endregion
+
         #region File menu items
         private void newToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -179,26 +194,15 @@ namespace NotepadLight
                 ofd.FilterIndex = 1;
                 ofd.Multiselect = false;
                 ofd.Title = "Open File";
-                if (ofd.ShowDialog(this) != System.Windows.Forms.DialogResult.OK)
-                    return;
-
-                else if (this.LoadFile(ofd.FileName))
+                if (ofd.ShowDialog(this) == System.Windows.Forms.DialogResult.OK)
                 {
-                    this.filename = ofd.FileName;
-                    this.textBox1.SelectionStart = 0;
-                    this.textBox1.SelectionLength = 0;
-                    this.UpdateCaption();
+                    this.LoadFile(ofd.FileName);
                 }
             }
 #else
-            if (this.openFileDialog1.ShowDialog(this) != System.Windows.Forms.DialogResult.OK)
-                return;
-            else if (this.LoadFile(this.openFileDialog1.FileName))
+            if (this.openFileDialog1.ShowDialog(this) == System.Windows.Forms.DialogResult.OK)
             {
-                this.filename = this.openFileDialog1.FileName;
-                this.textBox1.SelectionStart = 0;
-                this.textBox1.SelectionLength = 0;
-                this.UpdateCaption();
+                this.LoadFile(this.openFileDialog1.FileName);
             }
 #endif
         }
@@ -261,6 +265,11 @@ namespace NotepadLight
             this.printPreviewDialog1.ShowDialog(this);
         }
 
+        private void pageSetupToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            this.pageSetupDialog1.ShowDialog(this);
+        }
+
         private void exitToolStripMenuItem_Click(object sender, EventArgs e)
         {
             this.Close();
@@ -315,8 +324,12 @@ namespace NotepadLight
                 about.ShowDialog(this);
             }
         }
-        #endregion
 
+        private void wordWrapToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            Settings.Default.WordWrap = !Settings.Default.WordWrap;
+            Settings.Default.Save();
+        }
         #endregion
 
         #region Printing stuff
@@ -348,20 +361,30 @@ namespace NotepadLight
         }
         #endregion
 
-        private void wordWrapToolStripMenuItem_Click(object sender, EventArgs e)
+        #region Drag & Drop stuff
+        private void Form1_DragOver(object sender, DragEventArgs e)
         {
-            Settings.Default.WordWrap = !Settings.Default.WordWrap;
-            Settings.Default.Save();
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effect = DragDropEffects.Move;
+            }
         }
 
-        private void textBox1_ModifiedChanged(object sender, EventArgs e)
+        private void Form1_DragDrop(object sender, DragEventArgs e)
         {
-            this.UpdateCaption();
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                var files = e.Data.GetData(DataFormats.FileDrop) as string[];
+                if (files?.Any() ?? false)
+                {
+                    // for now process first file only
+                    if (this.SaveChanges(true))
+                    {
+                        this.LoadFile(files.First());
+                    }
+                }
+            }
         }
-
-        private void textBox1_TextChanged(object sender, EventArgs e)
-        {
-
-        }
+        #endregion
     }
 }
